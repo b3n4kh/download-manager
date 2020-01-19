@@ -287,9 +287,11 @@ def parallel_worker(name, section):
               help="Github OAuth Token")
 @click.option('--trigger', 'trigger',
               type=click.Choice(['artifactory']),
+              envvar='TRIGGER',
               help="Action after Download")
 @click.option('--storage', 'storage',
               default='mirror',
+              envvar='STORAGE',
               help="Cache Storage Path")
 def main(config_file, debug, oneshot, githubtoken, trigger, storage):
     """Python Download Manager"""
