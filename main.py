@@ -9,6 +9,7 @@ import click
 import hashlib
 import subprocess
 from manager import log, handler, action
+from multiprocessing import Pool
 
 
 def config_parser(config_file):
@@ -251,6 +252,26 @@ def get_static_file(name, config):
     return outfiles
 
 
+def parallel_worker(name, section):
+    logger.debug("Starte section: %s", name)
+    os.makedirs(STORAGE_PATH + '/' + name, mode=0o775, exist_ok=True)
+    for dltype, dlitems in section.items():
+        new_files = []
+        if dltype == 'github_release':
+            new_files.append(get_github_release(name, dlitems))
+        elif dltype == 'static_file':
+            new_files.extend(get_static_file(name, dlitems))
+        elif dltype == 'vscode':
+            new_files.extend(get_vscode_extension(name, dlitems))
+        elif dltype == 'hashicorp':
+            new_files.extend(get_hashicorp_release(name, dlitems))
+        elif dltype == 'selenium':
+            new_files.extend(handler.selenium_handler(name, dlitems))
+        else:
+            logger.error("Unbekannter Download type %s", dltype)
+            continue
+
+
 @click.command()
 @click.option('-d', '--debug',
               is_flag=True,
@@ -295,30 +316,14 @@ def main(config_file, debug, oneshot, githubtoken, trigger, storage):
                 action.cleanup_artifactory(filename)
             return
 
-        for name, section in config.items():
-            logger.debug("Starte section: %s", name)
-            os.makedirs(STORAGE_PATH + '/' + name, mode=0o775, exist_ok=True)
-            for dltype, dlitems in section.items():
-                new_files = []
-                if dltype == 'github_release':
-                    new_files.append(get_github_release(name, dlitems))
-                elif dltype == 'static_file':
-                    new_files.extend(get_static_file(name, dlitems))
-                elif dltype == 'vscode':
-                    new_files.extend(get_vscode_extension(name, dlitems))
-                elif dltype == 'hashicorp':
-                    new_files.extend(get_hashicorp_release(name, dlitems))
-                elif dltype == 'selenium':
-                    new_files.extend(handler.selenium_handler(name, dlitems))
-                else:
-                    logger.error("Unbekannter Download type %s", dltype)
-                    continue
+        with Pool() as pool:
+            new_files = pool.starmap(parallel_worker, config.items())
 
-                for filepath in filter(None, new_files):
-                    filename, checksum = action_handler(filepath)
-                    if trigger == 'artifactory':
-                        action.upload_to_artifactory(filename, filepath, checksum)
-                        action.cleanup_artifactory(filename)
+        for filepath in filter(None, new_files):
+            filename, checksum = action_handler(filepath)
+            if trigger == 'artifactory':
+                action.upload_to_artifactory(filename, filepath, checksum)
+                action.cleanup_artifactory(filename)
 
     except Exception as e:
         logger.error("Hups das hätten nicht passiern dürfen")
