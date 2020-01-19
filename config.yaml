@@ -1,0 +1,20 @@
+---
+#
+# This File is managed by kaminoinfrastruktur::downloadmanager
+#
+#static_file_example:
+#  static_file:
+#    url:
+#      - "https://www.python.org/ftp/python/3.7.2/python-3.7.2-amd64.exe"
+#      - "https://www.python.org/ftp/python/3.7.2/Python-3.7.2.tgz"
+#
+#github_release_example:
+#  github_release:
+#    version: "latest"
+#    repo: "tmux/tmux"  # https://github.com/tmux/tmux/releases
+#    assets: ".*tar\.gz" # Optioal filter
+#vscode_extensions_example:
+#  vscode:
+#    extensions:
+#      - "yzhang.markdown-all-in-one"
+

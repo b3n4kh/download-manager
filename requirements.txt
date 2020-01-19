@@ -1,0 +1,13 @@
+certifi
+chardet
+cssselect
+idna
+lxml
+pyquery
+requests
+six
+urllib3
+Click
+flake8
+pyquery
+pyyaml

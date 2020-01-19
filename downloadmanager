@@ -1,0 +1,5 @@
+#!/bin/bash
+
+source .envrc
+
+.venv/bin/python3 main.py $*

@@ -1,0 +1,12 @@
+.envrc
+.venv
+dist
+src
+prepare
+results
+rpmbuild
+*rpm
+__pycache__
+downloadmanager.spec
+geckodriver.log
+mirror
