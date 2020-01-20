@@ -67,10 +67,12 @@ def local_file_valid(name, url, filename=None):
         dest_file = "{0}/{1}/{2}".format(STORAGE_PATH, name, filename)
         if not os.path.isfile(dest_file):
             return False
+        if 'Last-Modified' not in r.headers:
+            return False
         url_date = datetime.datetime.strptime(r.headers['Last-Modified'], "%a, %d %b %Y %H:%M:%S GMT")
         file_date = datetime.datetime.utcfromtimestamp(os.path.getmtime(dest_file))
         logger.debug("URL_DATE: %s FILE_DATE: %s", str(url_date), str(file_date))
-        # Wenn url_date neuer 'größerr timestamp' dann download
+        # Wenn url_date neuer 'größer timestamp' dann download
         if url_date > file_date:
             return False
     except Exception as e:
@@ -162,6 +164,7 @@ def get_github_release(name, config):
         logger.error("Der Eintrag %s hat kein 'repo' gestetzt", name)
         return
 
+    outfiles = []
     try:
         #  and config['type'] == 'tag'
         if 'type' in config:
@@ -176,13 +179,13 @@ def get_github_release(name, config):
         logger.debug(e, exc_info=True)
         return
 
-    if os.path.isfile(STORAGE_PATH + '/' + name + '/' + extname):
+    if os.path.isfile(STORAGE_PATH + '/' + name + '/' + extname) or extname is None:
         logger.debug("File `%s` ist bereits aktuell", extname)
         return
 
-    outfile = download_and_store(name, url, filename=extname)
-    logger.info("File `%s` heruntergeladen", extname)
-    return outfile
+    outfiles.append(download_and_store(name, url, filename=extname))
+    logger.info("Github Release `%s` heruntergeladen", ", ".join(outfiles))
+    return outfiles
 
 
 def get_filename_from_url(url):
@@ -258,18 +261,24 @@ def parallel_worker(name, section):
     for dltype, dlitems in section.items():
         new_files = []
         if dltype == 'github_release':
-            new_files.append(get_github_release(name, dlitems))
+            files = get_github_release(name, dlitems)
+            new_files.extend(files) if files is not None else None
         elif dltype == 'static_file':
-            new_files.extend(get_static_file(name, dlitems))
+            files = get_static_file(name, dlitems)
+            new_files.extend(files) if files is not None else None
         elif dltype == 'vscode':
-            new_files.extend(get_vscode_extension(name, dlitems))
+            files = get_vscode_extension(name, dlitems)
+            new_files.extend(files) if files is not None else None
         elif dltype == 'hashicorp':
-            new_files.extend(get_hashicorp_release(name, dlitems))
+            files = get_hashicorp_release(name, dlitems)
+            new_files.extend(files) if files is not None else None
         elif dltype == 'selenium':
-            new_files.extend(handler.selenium_handler(name, dlitems))
+            files = handler.selenium_handler(name, dlitems)
+            new_files.extend(files) if files is not None else None
         else:
             logger.error("Unbekannter Download type %s", dltype)
             continue
+    return new_files
 
 
 @click.command()
