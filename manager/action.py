@@ -19,7 +19,7 @@ def upload_to_artifactory(filename, filepath, checksum):
     """
     try:
         logger.debug("Uploading %s with Checksum %s to Artifactory", filename, checksum)
-        command = "jfcli rt u {0} devtools-upload".format(filepath)
+        command = "jfcli rt u {0} devtools-upload/{1}".format(filepath, filename)
         subprocess.check_output([command], shell=True)
     except Exception as e:
         logger.debug(e, exc_info=True)
@@ -35,7 +35,6 @@ def cleanup_artifactory(filename):
     :returns: True if successful False if not
     """
     name_parts = re.split(versionsplit, filename, maxsplit=1)
-    logger.debug(name_parts)
     name = name_parts[0]
     if len(name_parts) <= 1:
         logger.debug("Keine Version gefunden breche Cleanup ab")
@@ -50,7 +49,6 @@ def cleanup_artifactory(filename):
 
     if jsonresult is not None:
         resultarray = json.loads(jsonresult)
-        logger.debug(resultarray)
 
     for path in resultarray:
         # print(path['path'].split('1', 1)[0])

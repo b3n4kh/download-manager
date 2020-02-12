@@ -4,10 +4,10 @@ cssselect
 idna
 lxml
 pyquery
+PyYAML
 requests
 six
 urllib3
 Click
 flake8
-pyquery
-pyyaml
+coloredlogs

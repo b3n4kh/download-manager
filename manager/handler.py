@@ -38,6 +38,7 @@ def github_release_api(name, config, githubtoken=None):
     else:
         r = requests.get(api_url)
     json_r = r.json()
+    logger.debug("Aufruf: {0}, Returned {1}".format(r.url, r.status_code))
 
     if 'assets' in config:
         regex = re.compile(config['assets'])

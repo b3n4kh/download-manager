@@ -3,6 +3,7 @@
 import os
 import requests
 import yaml
+import re
 import sys
 import datetime
 import click
@@ -57,7 +58,10 @@ def local_file_valid(name, url, filename=None):
     try:
         r = requests.head(url, allow_redirects=True)
         if filename is None:
-            filename = r.url.rsplit('/', 1)[1]
+            if 'content-disposition' in r.headers:
+                filename = re.findall("filename=(.+)", r.headers['content-disposition'])
+            else:
+                filename = r.url.rsplit('/', 1)[1]
     except Exception as e:
         logger.error("URL: %s konnte nicht erreicht werden", url)
         logger.debug(e, exc_info=True)
@@ -126,7 +130,7 @@ def get_vscode_extension(name, config):
         except Exception as e:
             logger.error("Kann VSCode API nicht erreichen")
             logger.debug(e, exc_info=True)
-            return
+            return outfiles
 
         logger.debug("Downloading %s from %s", extname, url)
 
@@ -147,7 +151,7 @@ def get_hashicorp_release(name, config):
         except Exception as e:
             logger.error("HTTP Fehler beim Download: %s", name)
             logger.debug(e, exc_info=True)
-            return
+            return outfiles
 
         logger.debug("Downloading %s from %s", extname, url)
 
@@ -160,28 +164,28 @@ def get_hashicorp_release(name, config):
 
 
 def get_github_release(name, config):
+    outfiles = []
     if "repo" not in config:
         logger.error("Der Eintrag %s hat kein 'repo' gestetzt", name)
-        return
+        return outfiles
 
-    outfiles = []
     try:
         #  and config['type'] == 'tag'
         if 'type' in config:
             if 'version' not in config:
                 logger.error("Github tag needs a version")
-                return
+                return outfiles
             url, extname = handler.github_tag_api(name, config, githubtoken=GITHUBTOKEN)
         else:
             url, extname = handler.github_release_api(name, config, githubtoken=GITHUBTOKEN)
     except Exception as e:
         logger.error("HTTP Fehler beim Download: %s", name)
         logger.debug(e, exc_info=True)
-        return
+        return outfiles
 
     if os.path.isfile(STORAGE_PATH + '/' + name + '/' + extname) or extname is None:
         logger.debug("File `%s` ist bereits aktuell", extname)
-        return
+        return outfiles
 
     outfiles.append(download_and_store(name, url, filename=extname))
     logger.info("Github Release `%s` heruntergeladen", ", ".join(outfiles))
@@ -219,15 +223,15 @@ def action_handler(filepath):
 
 
 def get_static_file(name, config):
+    outfiles = []
     if "url" not in config:
         logger.error("Der Eintrag %s hat keine 'url' gestetzt", name)
-        return
+        return outfiles
 
     urls = config['url']
     if isinstance(urls, str):
         urls = [urls, ]
     logger.debug(urls)
-    outfiles = []
 
     for url in urls:
         filename = get_filename_from_url(url)
@@ -258,26 +262,25 @@ def get_static_file(name, config):
 def parallel_worker(name, section):
     logger.debug("Starte section: %s", name)
     os.makedirs(STORAGE_PATH + '/' + name, mode=0o775, exist_ok=True)
-    for dltype, dlitems in section.items():
-        new_files = []
-        if dltype == 'github_release':
-            files = get_github_release(name, dlitems)
-            new_files.extend(files) if files is not None else None
-        elif dltype == 'static_file':
-            files = get_static_file(name, dlitems)
-            new_files.extend(files) if files is not None else None
-        elif dltype == 'vscode':
-            files = get_vscode_extension(name, dlitems)
-            new_files.extend(files) if files is not None else None
-        elif dltype == 'hashicorp':
-            files = get_hashicorp_release(name, dlitems)
-            new_files.extend(files) if files is not None else None
-        elif dltype == 'selenium':
-            files = handler.selenium_handler(name, dlitems)
-            new_files.extend(files) if files is not None else None
-        else:
-            logger.error("Unbekannter Download type %s", dltype)
-            continue
+    new_files = []
+    try:
+        for dltype, dlitems in section.items():
+            if dltype == 'github_release':
+                new_files.extend(get_github_release(name, dlitems))
+            elif dltype == 'static_file':
+                new_files.extend(get_static_file(name, dlitems))
+            elif dltype == 'vscode':
+                new_files.extend(get_vscode_extension(name, dlitems))
+            elif dltype == 'hashicorp':
+                new_files.extend(get_hashicorp_release(name, dlitems))
+            elif dltype == 'selenium':
+                new_files.extend(handler.selenium_handler(name, dlitems))
+            else:
+                logger.error("Unbekannter Download type %s", dltype)
+                continue
+    except Exception as e:
+        logger.error("Fehler beim verarbeiten der section %s", name)
+        logger.debug(e, exc_info=True)
     return new_files
 
 
@@ -330,6 +333,11 @@ def main(config_file, debug, oneshot, githubtoken, trigger, storage):
         with Pool() as pool:
             new_files = pool.starmap(parallel_worker, config.items())
 
+        if any(isinstance(e, list) for e in new_files):
+            flattend_files = [f for e in new_files for f in e]
+            new_files = flattend_files
+
+        logger.debug(new_files)
         for filepath in filter(None, new_files):
             filename, checksum = action_handler(filepath)
             if trigger == 'artifactory':
@@ -339,6 +347,7 @@ def main(config_file, debug, oneshot, githubtoken, trigger, storage):
     except Exception as e:
         logger.error("Hups das hätten nicht passiern dürfen")
         logger.debug(e, exc_info=True)
+        sys.exit(-1)
 
 
 if __name__ == "__main__":

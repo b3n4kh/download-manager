@@ -9,7 +9,7 @@ github_release_example:
   github_release:
     version: "latest"
     repo: "tmux/tmux"  # https://github.com/tmux/tmux/releases
-    assets: '.*tar\.gz' # Optioal filter
+    assets: ".*tar\.gz" # Optioal filter
 vscode_extensions_example:
   vscode:
     extensions:
