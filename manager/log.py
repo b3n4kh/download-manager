@@ -11,7 +11,6 @@ def configure_logging(debug):
         coloredlogs.install(level='DEBUG')
     else:
         coloredlogs.install()
-
-    consol = logging.StreamHandler(sys.stdout)
-    logger.addHandler(consol)
+        
     return logger
+

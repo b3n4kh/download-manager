@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
 
 import os
 import requests
@@ -9,8 +9,7 @@ import datetime
 import click
 import hashlib
 import subprocess
-from manager import log, handler, action
-from multiprocessing import Pool
+from .manager import log, handler, action
 
 
 def config_parser(config_file):
@@ -142,27 +141,6 @@ def get_vscode_extension(name, config):
     return outfiles
 
 
-def get_hashicorp_release(name, config):
-    outfiles = []
-    products = config['products']
-    for product in products:
-        try:
-            url, extname = handler.hashicorp_release_api(name, product)
-        except Exception as e:
-            logger.error("HTTP Fehler beim Download: %s", name)
-            logger.debug(e, exc_info=True)
-            return outfiles
-
-        logger.debug("Downloading %s from %s", extname, url)
-
-        if os.path.isfile(STORAGE_PATH + '/' + name + '/' + extname):
-            logger.debug("File `%s` ist bereits aktuell", extname)
-            continue
-        outfiles.append(download_and_store(name, url, filename=extname))
-        logger.info("Hashicorp product `%s` heruntergeladen", ", ".join(outfiles))
-    return outfiles
-
-
 def get_github_release(name, config):
     outfiles = []
     if "repo" not in config:
@@ -189,6 +167,55 @@ def get_github_release(name, config):
 
     outfiles.append(download_and_store(name, url, filename=extname))
     logger.info("Github Release `%s` heruntergeladen", ", ".join(outfiles))
+    return outfiles
+
+
+def get_github_json(name, config):
+    outfiles = []
+    if "repo" not in config:
+        logger.error("Der Eintrag %s hat kein 'repo' gestetzt", name)
+        return outfiles
+
+    try:
+        version, url, extname = handler.github_json_check(name, config, githubtoken=GITHUBTOKEN)
+    except Exception as e:
+        logger.error("HTTP Fehler beim Download: %s", name)
+        logger.debug(e, exc_info=True)
+        return outfiles
+
+    stored_file_path = "{0}/{1}/{2}".format(STORAGE_PATH, name, extname)
+    version_file_path = "{0}.version".format(stored_file_path, version)
+
+    if os.path.isfile(stored_file_path):
+        if os.path.isfile(version_file_path):
+            with open(version_file_path, 'rb') as f:
+                stored_version = f.read()
+            if stored_version == version:
+                logger.debug("File `%s` ist bereits aktuell", extname)
+                return outfiles
+
+    with open(version_file_path, 'w') as f:
+        f.write(version)
+    outfiles.append(download_and_store(name, url, filename=extname))
+    logger.info("Github zip `%s` heruntergeladen", ", ".join(outfiles))
+    return outfiles
+
+
+def get_from_handler(name, handlername, config):
+    outfiles = []
+    try:
+        url, extname = getattr(handler, handlername)(name)
+    except Exception as e:
+        logger.error("HTTP Fehler beim Download: %s", name)
+        logger.debug(e, exc_info=True)
+        return outfiles
+
+    if os.path.isfile(STORAGE_PATH + '/' + name + '/' + extname) or extname is None:
+        logger.debug("File `%s` ist bereits aktuell", extname)
+        return outfiles
+
+    outfiles.append(download_and_store(name, url, filename=extname))
+    logger.info("File `%s` heruntergeladen", ", ".join(outfiles))
     return outfiles
 
 
@@ -234,7 +261,10 @@ def get_static_file(name, config):
     logger.debug(urls)
 
     for url in urls:
-        filename = get_filename_from_url(url)
+        if "filename" in config:
+            filename = config['filename']
+        else:
+            filename = get_filename_from_url(url)
 
         if local_file_valid(name, url, filename=filename):
             logger.debug("File `%s` ist bereits aktuell", filename)
@@ -267,17 +297,17 @@ def parallel_worker(name, section):
         for dltype, dlitems in section.items():
             if dltype == 'github_release':
                 new_files.extend(get_github_release(name, dlitems))
+            elif dltype == 'github_json':
+                new_files.extend(get_github_json(name, dlitems))
             elif dltype == 'static_file':
                 new_files.extend(get_static_file(name, dlitems))
             elif dltype == 'vscode':
                 new_files.extend(get_vscode_extension(name, dlitems))
-            elif dltype == 'hashicorp':
-                new_files.extend(get_hashicorp_release(name, dlitems))
             elif dltype == 'selenium':
                 new_files.extend(handler.selenium_handler(name, dlitems))
             else:
-                logger.error("Unbekannter Download type %s", dltype)
-                continue
+                new_files.extend(get_from_handler(name, dltype, dlitems))
+                
     except Exception as e:
         logger.error("Fehler beim verarbeiten der section %s", name)
         logger.debug(e, exc_info=True)
@@ -290,8 +320,9 @@ def parallel_worker(name, section):
               default=False,
               envvar='RD_JOB_LOGLEVEL')
 @click.option('--config', 'config_file',
-              default='config.yaml',
-              help="Config File defaults to 'config.yaml'")
+              default='/etc/downloadmanager/config.yaml',
+              help="Config File defaults to 'config.yaml'",
+              envvar='CONFIG_FILE')
 @click.option('--oneshot', 'oneshot',
               help="Oneshot Download specified URL")
 @click.option('--githubtoken', 'githubtoken',
@@ -330,8 +361,11 @@ def main(config_file, debug, oneshot, githubtoken, trigger, storage):
                 action.cleanup_artifactory(filename)
             return
 
-        with Pool() as pool:
-            new_files = pool.starmap(parallel_worker, config.items())
+        # with Pool() as pool:
+        #    new_files = pool.starmap(parallel_worker, config.items())
+        new_files = []
+        for name, item in config.items():
+            new_files.append(parallel_worker(name, item))
 
         if any(isinstance(e, list) for e in new_files):
             flattend_files = [f for e in new_files for f in e]
