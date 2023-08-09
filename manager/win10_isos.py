@@ -75,7 +75,7 @@ def win10license(destination):
 
     #  driver.find_element_by_id("ctl00_ctl00_MainContent_BodyContent_TRGrid_ctl01_tc_tab3_downloadPanel_FilesPanel_fileGrid_ctl03_download").click()
     #  time.sleep(1.0)  
-    
+
     #find table element where all updates are listed
     fileTable = driver.find_element_by_xpath('//*[@id="filePanel"]/table/tbody') #/tr[2]/td[1]/span
 
@@ -84,9 +84,8 @@ def win10license(destination):
     i = 0
     for row in fileTable.find_elements_by_xpath(".//tr"):
         print(i, "    ", row.find_element_by_xpath('.//td[1]/span').text)
-        Versions[i] = {}
-        Versions[i]['Name'] = row.find_element_by_xpath('.//td[1]/span').text
-        if not "Files" in Versions[i]['Name']:
+        Versions[i] = {'Name': row.find_element_by_xpath('.//td[1]/span').text}
+        if "Files" not in Versions[i]['Name']:
             Versions[i]['LinkID'] = row.find_element_by_xpath('.//td[5]/input').get_attribute('id')
             i+=1
         CountItems = i
@@ -101,7 +100,7 @@ def win10license(destination):
     time.sleep(5)
     seconds = 0
     dl_wait = True
-    
+
     while dl_wait and seconds < timeout:
         time.sleep(5)
         dl_wait = False
@@ -110,7 +109,7 @@ def win10license(destination):
             if fname.endswith('.crdownload'):
                 dl_wait = True
         seconds += 1
-    print("This took {} seconds".format(seconds))
+    print(f"This took {seconds} seconds")
     return "Done"
 
 

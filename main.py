@@ -88,10 +88,10 @@ def hash_file(file_path, algo, buf_size=4 * 1024**2):
     hasher = hashlib.new(algo)
     with open(file_path, 'rb') as f:
         while True:
-            data = f.read(buf_size)
-            if not data:
+            if data := f.read(buf_size):
+                hasher.update(data)
+            else:
                 break
-            hasher.update(data)
     return hasher.hexdigest()
 
 
@@ -109,7 +109,7 @@ def check_md5sum(name, checksumUrl):
 
 def verify_hash(file, hash, type="md5"):
     compare_string = '%s  %s' % hash, file
-    compare_util = '%ssum' % type
+    compare_util = f'{type}sum'
     try:
         subprocess.run(["echo", compare_string, "|", compare_util, "--check"], shell=True, check=True)
     except subprocess.CalledProcessError as e:
@@ -133,7 +133,7 @@ def get_vscode_extension(name, config):
 
         logger.debug("Downloading %s from %s", extname, url)
 
-        if os.path.isfile(STORAGE_PATH + '/' + name + '/' + extname):
+        if os.path.isfile(f'{STORAGE_PATH}/{name}/{extname}'):
             logger.debug("File `%s` ist bereits aktuell", extname)
             continue
         outfiles.append(download_and_store(name, url, filename=extname))
@@ -161,7 +161,7 @@ def get_github_release(name, config):
         logger.debug(e, exc_info=True)
         return outfiles
 
-    if os.path.isfile(STORAGE_PATH + '/' + name + '/' + extname) or extname is None:
+    if os.path.isfile(f'{STORAGE_PATH}/{name}/{extname}') or extname is None:
         logger.debug("File `%s` ist bereits aktuell", extname)
         return outfiles
 
@@ -210,7 +210,7 @@ def get_from_handler(name, handlername, config):
         logger.debug(e, exc_info=True)
         return outfiles
 
-    if os.path.isfile(STORAGE_PATH + '/' + name + '/' + extname) or extname is None:
+    if os.path.isfile(f'{STORAGE_PATH}/{name}/{extname}') or extname is None:
         logger.debug("File `%s` ist bereits aktuell", extname)
         return outfiles
 
@@ -229,8 +229,7 @@ def get_filename_from_url(url):
 
     redirected_url = res.url
     uri_filename = redirected_url.rsplit('/', 1)[1]
-    filename = uri_filename.rsplit('?', 1)[0]
-    return filename
+    return uri_filename.rsplit('?', 1)[0]
 
 
 def oneshot_download(url):
@@ -291,7 +290,7 @@ def get_static_file(name, config):
 
 def parallel_worker(name, section):
     logger.debug("Starte section: %s", name)
-    os.makedirs(STORAGE_PATH + '/' + name, mode=0o775, exist_ok=True)
+    os.makedirs(f'{STORAGE_PATH}/{name}', mode=0o775, exist_ok=True)
     new_files = []
     try:
         for dltype, dlitems in section.items():
@@ -307,7 +306,7 @@ def parallel_worker(name, section):
                 new_files.extend(handler.selenium_handler(name, dlitems))
             else:
                 new_files.extend(get_from_handler(name, dltype, dlitems))
-                
+
     except Exception as e:
         logger.error("Fehler beim verarbeiten der section %s", name)
         logger.debug(e, exc_info=True)
@@ -361,12 +360,7 @@ def main(config_file, debug, oneshot, githubtoken, trigger, storage):
                 action.cleanup_artifactory(filename)
             return
 
-        # with Pool() as pool:
-        #    new_files = pool.starmap(parallel_worker, config.items())
-        new_files = []
-        for name, item in config.items():
-            new_files.append(parallel_worker(name, item))
-
+        new_files = [parallel_worker(name, item) for name, item in config.items()]
         if any(isinstance(e, list) for e in new_files):
             flattend_files = [f for e in new_files for f in e]
             new_files = flattend_files
