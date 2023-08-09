@@ -55,7 +55,7 @@ def cleanup_artifactory(filename):
         result_parts = re.split(versionsplit, path['path'], maxsplit=1)
         resultname = result_parts[0]
         resultversion = result_parts[1]
-        logger.debug("Aktuelle Version: " + version + " Gefundene Version: " + resultversion)
+        logger.debug(f"Aktuelle Version: {version} Gefundene Version: {resultversion}")
         if version != resultversion:
             logger.debug("Will Delete Version: {0} Of the Artifact: {1}".format(resultversion, resultname))
             deletecommand = "jfcli rt del --quiet {0}".format(path['path'])

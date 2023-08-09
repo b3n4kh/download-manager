@@ -78,12 +78,11 @@ def github_json_check(name, config, githubtoken=None):
     api_url = '{0}/{1}/{2}/{3}'.format(GITHUB_API, config['repo'], branch, json_file)
     json_r = github_api_requester(api_url, githubtoken)
 
-    if 'version' in json_r:
-        downloadurl = 'https://github.com/{0}/archive/{1}.zip'.format(config['repo'], branch)
-        downloadname = '{0}-{1}.zip'.format(config['repo'], branch)
-        return [json_r['version'], downloadurl, downloadname]
-    else:
-        raise KeyError("No 'version' key in: " + json_file)
+    if 'version' not in json_r:
+        raise KeyError(f"No 'version' key in: {json_file}")
+    downloadurl = 'https://github.com/{0}/archive/{1}.zip'.format(config['repo'], branch)
+    downloadname = '{0}-{1}.zip'.format(config['repo'], branch)
+    return [json_r['version'], downloadurl, downloadname]
 
 
 def trendmicro(name):
@@ -106,7 +105,7 @@ def hashicorp(name, product):
     pqdata = pq(r.text)
     hrefs = [i.attr('href') for i in pqdata('a').items()]
     regex = re.compile(r"/{0}/(\d+\.\d+\.\d+)/".format(product))
-    versions = [regex.fullmatch(c).group(1) for c in hrefs if regex.fullmatch(c)]
+    versions = [regex.fullmatch(c)[1] for c in hrefs if regex.fullmatch(c)]
     latestversion = max(versions, key=versionsplit)
     logger.debug("Neuerste Version: {0}".format(latestversion))
     downloadname = '{0}_{1}_linux_amd64.zip'.format(product, latestversion)
@@ -161,11 +160,3 @@ def get_qgis_plugin(plugin):
 def selenium_handler(name, config):
     # TODO: IMPLEMENT
     return []
-    try:
-        logger.debug("Starte selenium driver: %s", name)
-        handler_module = importlib.import_module(config['handler'])
-        filename = handler_module.main()
-        return [filename]
-    except Exception as e:
-        logger.error("Selenium Driver failed")
-        logger.debug(e, exc_info=True)
